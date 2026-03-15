@@ -5,6 +5,82 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>ملك الفلترة</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCBLv0cM_wTg2Af7W5v-9Kk6nFdSPoAPEo",
+    authDomain: "king-of-filtering-4e2f0.firebaseapp.com",
+    databaseURL: "https://king-of-filtering-4e2f0-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "king-of-filtering-4e2f0",
+    storageBucket: "king-of-filtering-4e2f0.firebasestorage.app",
+    messagingSenderId: "931937657323",
+    appId: "1:931937657323:web:83adcca985055a6fab39ae"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // ── Firebase helpers exposed globally ──
+  window._fbDb = db;
+  window._fbRef = ref;
+  window._fbSet = set;
+  window._fbGet = get;
+  window._fbOnValue = onValue;
+  window._fbChild = child;
+  window._fbReady = true;
+
+  // ── Live listeners: update local app when DB changes ──
+  // Users
+  onValue(ref(db,'users'), snap=>{
+    if(snap.exists()){
+      const data = snap.val();
+      localStorage.setItem('sec_maint_users', JSON.stringify(data));
+    }
+  });
+  // Tasks
+  onValue(ref(db,'tasks'), snap=>{
+    if(snap.exists()){
+      const data = snap.val();
+      // Convert object to array if needed
+      const arr = Array.isArray(data) ? data : Object.values(data);
+      localStorage.setItem('sec_maint_tasks', JSON.stringify(arr));
+      // Re-render tasks screen if it's open
+      if(typeof renderTasksScreen === 'function'){
+        const ts = document.getElementById('tasksScreen');
+        if(ts && ts.style.display !== 'none') renderTasksScreen();
+      }
+    }
+  });
+  // Custom work types (all regions)
+  onValue(ref(db,'customWT'), snap=>{
+    if(snap.exists()){
+      const data = snap.val();
+      Object.entries(data).forEach(([region, val])=>{
+        localStorage.setItem('sec_maint_cwt_'+region, JSON.stringify(val));
+      });
+    }
+  });
+  // Price overrides (all regions)
+  onValue(ref(db,'priceOverrides'), snap=>{
+    if(snap.exists()){
+      const data = snap.val();
+      Object.entries(data).forEach(([region, val])=>{
+        localStorage.setItem('sec_maint_owt_'+region, JSON.stringify(val));
+      });
+    }
+  });
+  // Performance
+  onValue(ref(db,'perf'), snap=>{
+    if(snap.exists()){
+      localStorage.setItem('sec_maint_perf', JSON.stringify(snap.val()));
+    }
+  });
+
+  console.log('✅ Firebase connected');
+</script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--c:#0057B8;--c2:#0077CC;--g:#00B4A0;--r:#e53935;--bg:#eef4ff;--card:#fff;--border:#d0dff0;--txt:#0a2040;--muted:#6a7f9a}
@@ -467,6 +543,22 @@ const EXCEL_TEMPLATES={
 // ══════════════════════════════════════════════════════════════
 //  AUTH SYSTEM
 // ══════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════
+//  FIREBASE SYNC HELPERS
+// ══════════════════════════════════════════════════════════════
+function fbWrite(path, data){
+  if(!window._fbReady) return;
+  try{
+    window._fbSet(window._fbRef(window._fbDb, path), data);
+  } catch(e){ console.warn('Firebase write error:', e); }
+}
+function fbSyncUsers(u){ fbWrite('users', u); }
+function fbSyncTasks(t){ fbWrite('tasks', t.length>0?t:[]); }
+function fbSyncCustomWT(region, data){ fbWrite('customWT/'+region, data); }
+function fbSyncPriceOverrides(region, data){ fbWrite('priceOverrides/'+region, data); }
+function fbSyncPerf(data){ fbWrite('perf', data); }
+
 const AUTH_KEY='sec_maint_users',SESSION_KEY='sec_maint_session';
 function getUsers(){
   try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')||defaultUsers();}
@@ -480,9 +572,10 @@ function defaultUsers(){
     {username:'asst1',     password:'Asst@1234', displayName:'مساعد المدير',     role:'assistant_manager'},
   ];
   localStorage.setItem(AUTH_KEY,JSON.stringify(u));
+  fbSyncUsers(u);
   return u;
 }
-function saveUsers(u){localStorage.setItem(AUTH_KEY,JSON.stringify(u));}
+function saveUsers(u){localStorage.setItem(AUTH_KEY,JSON.stringify(u));fbSyncUsers(u);}
 function getSession(){
   try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}
   catch{return null;}
@@ -528,13 +621,38 @@ document.addEventListener('DOMContentLoaded',()=>{
   ['loginUser','loginPass'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   });
-  // Auto-login from session
-  const sess=getSession();
-  if(sess){
-    currentUser=sess;
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('loggedUserName').textContent=sess.displayName||sess.username;
-    routeAfterLogin();
+
+  // ── Pull latest data from Firebase before auto-login ──
+  const doAutoLogin = () => {
+    const sess=getSession();
+    if(sess){
+      // Re-validate session against current users (may have changed in Firebase)
+      const users=getUsers();
+      const valid=users.find(u=>u.username===sess.username&&u.password===sess.password);
+      if(valid){
+        currentUser=valid;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('loggedUserName').textContent=valid.displayName||valid.username;
+        routeAfterLogin();
+      } else {
+        clearSession();
+      }
+    }
+  };
+
+  // Wait briefly for Firebase listeners to populate localStorage, then auto-login
+  if(window._fbReady){
+    setTimeout(doAutoLogin, 800);
+  } else {
+    // Firebase not ready yet — wait for it
+    let waited=0;
+    const waitFb = setInterval(()=>{
+      waited+=100;
+      if(window._fbReady||waited>3000){
+        clearInterval(waitFb);
+        setTimeout(doAutoLogin, 400);
+      }
+    },100);
   }
 });
 
@@ -1658,7 +1776,7 @@ const CUSTOM_WT_KEY=r=>`sec_maint_cwt_${r}`;
 function saveCustomWTs(){
   if(!currentRegion)return;
   const custom=workTypes.filter(w=>w.isCustom);
-  localStorage.setItem(CUSTOM_WT_KEY(currentRegion),JSON.stringify(custom));
+  localStorage.setItem(CUSTOM_WT_KEY(currentRegion),JSON.stringify(custom));fbSyncCustomWT(currentRegion,custom);
 }
 function loadCustomWTs(regionKey){
   try{return JSON.parse(localStorage.getItem(CUSTOM_WT_KEY(regionKey))||'[]');}catch{return[];}
@@ -1759,7 +1877,7 @@ function saveOriginalWTOverrides(){
       overrides[w.key]={label:w.label,code:w.code,desc:w.desc,unit:w.unit,price:w.price};
     }
   });
-  localStorage.setItem(`sec_maint_owt_${currentRegion}`,JSON.stringify(overrides));
+  localStorage.setItem(`sec_maint_owt_${currentRegion}`,JSON.stringify(overrides));fbSyncPriceOverrides(currentRegion,overrides);
 }
 function loadOriginalWTOverrides(regionKey){
   try{return JSON.parse(localStorage.getItem(`sec_maint_owt_${regionKey}`)||'{}');}catch{return{};}
@@ -2818,7 +2936,7 @@ const TASKS_KEY='sec_maint_tasks';
 let currentTaskFilter='all';
 
 function getTasks(){try{return JSON.parse(localStorage.getItem(TASKS_KEY)||'[]');}catch{return[];}}
-function saveTasks(t){localStorage.setItem(TASKS_KEY,JSON.stringify(t));}
+function saveTasks(t){localStorage.setItem(TASKS_KEY,JSON.stringify(t));fbSyncTasks(t);}
 
 function showTasksScreen(){
   document.getElementById('regionScreen').style.display='none';
@@ -3095,7 +3213,7 @@ let perfSessionStart=null,perfLastActivity=Date.now(),perfInactivityTimer=null;
 const INACTIVITY_LIMIT=10*60*1000; // 10 minutes
 
 function perfLoad(){try{return JSON.parse(localStorage.getItem(PERF_KEY)||'{}');}catch{return{};}}
-function perfSave(d){localStorage.setItem(PERF_KEY,JSON.stringify(d));}
+function perfSave(d){localStorage.setItem(PERF_KEY,JSON.stringify(d));fbSyncPerf(d);}
 
 function perfStartSession(){
   if(!currentUser)return;

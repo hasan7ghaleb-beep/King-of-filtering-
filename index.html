@@ -10,6 +10,7 @@
 :root{--c:#0057B8;--c2:#0077CC;--g:#00B4A0;--r:#e53935;--bg:#eef4ff;--card:#fff;--border:#d0dff0;--txt:#0a2040;--muted:#6a7f9a}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:var(--bg);direction:rtl;color:var(--txt);min-height:100vh}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #regionScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:linear-gradient(145deg,#001833 0%,#002966 55%,#003d99 100%)}
 #regionScreen h1{color:#fff;font-size:26px;font-weight:700;margin-bottom:6px;text-align:center}
 #regionScreen p{color:rgba(255,255,255,.6);font-size:13px;margin-bottom:32px;text-align:center}
@@ -241,6 +242,39 @@ input[type=radio]{accent-color:var(--c)}
 .logged-user:hover{background:rgba(255,255,255,.25)}
 @media(max-width:680px){.fields-row{grid-template-columns:1fr}.photos-section{grid-template-columns:1fr}.before-panel{border-left:none;border-bottom:1.5px solid var(--border)}.meas-grid{grid-template-columns:1fr 1fr}.region-grid{grid-template-columns:1fr 1fr}.add-wt-row{grid-template-columns:1fr 1fr}}
 </style>
+<script type="module">
+// ══════════════════════════════════════════════════
+//  FIREBASE CONFIG — استبدل بإعداداتك من Firebase Console
+// ══════════════════════════════════════════════════
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, remove, push }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDBaRYgv68LhH2xZN2BsC5eEW92YUJx7gY",
+  authDomain: "king-of-filtering.firebaseapp.com",
+  databaseURL: "https://king-of-filtering-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "king-of-filtering",
+  storageBucket: "king-of-filtering.firebasestorage.app",
+  messagingSenderId: "549508551252",
+  appId: "1:549508551252:web:89a13572ea0772bfdb13c1",
+  measurementId: "G-FF72YTLTYF"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ── expose helpers to global scope ──
+window._fb = { db, ref, set, get, onValue, update, remove, push };
+window._fbReady = true;
+// Show connecting indicator while loading
+const _fbc = document.getElementById('fbConnecting');
+if(_fbc) _fbc.style.display='block';
+window.dispatchEvent(new Event('fbReady'));
+// Hide connecting indicator
+const fbc = document.getElementById('fbConnecting');
+if(fbc) fbc.style.display='none';
+</script>
 </head>
 <body>
 
@@ -253,6 +287,9 @@ input[type=radio]{accent-color:var(--c)}
     </div>
     <div class="login-form">
     <div class="login-err" id="loginErr">اسم المستخدم أو كلمة المرور غير صحيحة</div>
+    <div id="fbConnecting" style="text-align:center;padding:10px 0;font-size:12px;color:rgba(255,255,255,.6);display:none">
+      <span style="animation:spin 1s linear infinite;display:inline-block;margin-left:5px">⏳</span> جاري الاتصال بالخادم...
+    </div>
     <div class="login-field"><label>اسم المستخدم</label><input id="loginUser" type="text" placeholder="أدخل اسم المستخدم" autocomplete="username"></div>
     <div class="login-field"><label>كلمة المرور</label><input id="loginPass" type="password" placeholder="أدخل كلمة المرور" autocomplete="current-password"></div>
     <button class="login-btn" onclick="doLogin()">تسجيل الدخول</button>
@@ -467,22 +504,65 @@ const EXCEL_TEMPLATES={
 // ══════════════════════════════════════════════════════════════
 //  AUTH SYSTEM
 // ══════════════════════════════════════════════════════════════
-const AUTH_KEY='sec_maint_users',SESSION_KEY='sec_maint_session';
-function getUsers(){
-  try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')||defaultUsers();}
-  catch{return defaultUsers();}
-}
+const SESSION_KEY='sec_maint_session';
+
+// ── Firebase-backed Users ──
+let _usersCache = null;
+let _fbUsersListenerActive = false;
+
 function defaultUsers(){
-  const u=[
-    {username:'admin',     password:'admin1234', displayName:'المدير العام',     role:'admin'},
-    {username:'eng1',      password:'Eng@1234',  displayName:'مهندس الصيانة',    role:'engineer'},
-    {username:'tech1',     password:'Tech@1234', displayName:'الفني',            role:'technician'},
-    {username:'asst1',     password:'Asst@1234', displayName:'مساعد المدير',     role:'assistant_manager'},
+  return [
+    {username:'admin', password:'admin1234', displayName:'المدير العام',  role:'admin'},
+    {username:'eng1',  password:'Eng@1234',  displayName:'مهندس الصيانة', role:'engineer'},
+    {username:'tech1', password:'Tech@1234', displayName:'الفني',         role:'technician'},
+    {username:'asst1', password:'Asst@1234', displayName:'مساعد المدير',  role:'assistant_manager'},
   ];
-  localStorage.setItem(AUTH_KEY,JSON.stringify(u));
-  return u;
 }
-function saveUsers(u){localStorage.setItem(AUTH_KEY,JSON.stringify(u));}
+
+function getUsers(){
+  return _usersCache || defaultUsers();
+}
+
+// Real-time listener للمستخدمين — يحدّث الكاش فور أي تغيير
+async function loadUsersFromFB(){
+  if(!window._fbReady) return;
+  if(_fbUsersListenerActive) return; // لا تسجّل مستمع مكرر
+  _fbUsersListenerActive = true;
+  const {db,ref,onValue,set} = window._fb;
+  return new Promise((resolve)=>{
+    let resolved = false;
+    onValue(ref(db,'users'), async (snap)=>{
+      if(snap.exists()){
+        _usersCache = Object.values(snap.val());
+      } else {
+        // أول تشغيل - ارفع المستخدمين الافتراضيين
+        const defs = defaultUsers();
+        const obj={};
+        defs.forEach(u=>{obj[u.username]=u;});
+        await set(ref(db,'users'), obj);
+        _usersCache = defs;
+      }
+      // تحديث قائمة المستخدمين إذا كانت مفتوحة
+      if(document.getElementById('usersPanel')?.classList.contains('open')){
+        renderUsersList();
+      }
+      if(!resolved){ resolved=true; resolve(); }
+    });
+  });
+}
+
+async function saveUsersFB(u){
+  if(!window._fbReady) return;
+  const {db,ref,set} = window._fb;
+  const obj={};
+  u.forEach((usr)=>{obj[usr.username]=usr;});
+  await set(ref(db,'users'), obj);
+}
+
+function saveUsers(u){
+  _usersCache = u;
+  saveUsersFB(u);
+}
 function getSession(){
   try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}
   catch{return null;}
@@ -492,12 +572,21 @@ function clearSession(){sessionStorage.removeItem(SESSION_KEY);}
 
 let currentUser=null;
 
-function doLogin(){
+async function doLogin(){
   const uname=document.getElementById('loginUser').value.trim();
   const pass=document.getElementById('loginPass').value;
   const err=document.getElementById('loginErr');
+  const btn=document.querySelector('.login-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ جاري التحقق...';}
+  // انتظر Firebase إذا لم يكن جاهزاً بعد
+  if(!window._fbReady){
+    await new Promise(r=>window.addEventListener('fbReady',r,{once:true}));
+  }
+  // تأكد من تحميل المستخدمين من Firebase أولاً
+  await loadUsersFromFB();
   const users=getUsers();
   const found=users.find(u=>u.username===uname&&u.password===pass);
+  if(btn){btn.disabled=false;btn.textContent='تسجيل الدخول';}
   if(!found){err.style.display='block';document.getElementById('loginPass').value='';return;}
   err.style.display='none';
   currentUser=found;
@@ -524,19 +613,61 @@ function routeAfterLogin(){
 }
 
 // Allow Enter key in login
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',async ()=>{
   ['loginUser','loginPass'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   });
+
+  // ── انتظر Firebase ثم حمّل البيانات ──
+  async function initFirebase(){
+    await loadUsersFromFB();
+    await loadTasksFromFB();
+    await loadWtFromFB();
+    await loadPerfFromFB();
+  }
+
+  if(window._fbReady){
+    await initFirebase();
+  } else {
+    window.addEventListener('fbReady', ()=>initFirebase(), {once:true});
+  }
+
   // Auto-login from session
   const sess=getSession();
   if(sess){
     currentUser=sess;
+    // تحديث الـ session بآخر بيانات من Firebase
+    const fresh = getUsers().find(u=>u.username===sess.username);
+    if(fresh){ currentUser=fresh; setSession(fresh); }
     document.getElementById('loginScreen').style.display='none';
-    document.getElementById('loggedUserName').textContent=sess.displayName||sess.username;
+    document.getElementById('loggedUserName').textContent=currentUser.displayName||currentUser.username;
     routeAfterLogin();
   }
 });
+
+// ── تحميل Work Types من Firebase ──
+async function loadWtFromFB(){
+  if(!window._fbReady) return;
+  const {db,ref,get} = window._fb;
+  try{
+    const [cwSnap,owSnap] = await Promise.all([
+      get(ref(db,'customWt')),
+      get(ref(db,'wtOverrides'))
+    ]);
+    if(cwSnap.exists()) _customWtCache = cwSnap.val();
+    if(owSnap.exists()) _wtOverridesCache = owSnap.val();
+  }catch(e){console.error('loadWt',e);}
+}
+
+// ── تحميل Perf من Firebase ──
+async function loadPerfFromFB(){
+  if(!window._fbReady) return;
+  const {db,ref,get} = window._fb;
+  try{
+    const snap = await get(ref(db,'perf'));
+    if(snap.exists()) _perfCache = snap.val();
+  }catch(e){console.error('loadPerf',e);}
+}
 
 function renderRegionUserBtn(){
   const rs=document.getElementById('regionScreen');
@@ -1655,13 +1786,16 @@ function goBack(){
 
 // ═══ Work types ═══
 const CUSTOM_WT_KEY=r=>`sec_maint_cwt_${r}`;
+let _customWtCache={};
+let _wtOverridesCache={};
 function saveCustomWTs(){
   if(!currentRegion)return;
   const custom=workTypes.filter(w=>w.isCustom);
-  localStorage.setItem(CUSTOM_WT_KEY(currentRegion),JSON.stringify(custom));
+  _customWtCache[currentRegion] = custom;
+  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,`customWt/${currentRegion}`), custom); }
 }
 function loadCustomWTs(regionKey){
-  try{return JSON.parse(localStorage.getItem(CUSTOM_WT_KEY(regionKey))||'[]');}catch{return[];}
+  return _customWtCache[regionKey] || [];
 }
 
 function toggleWT(){$('wtBody').classList.toggle('open');$('wtArrow').textContent=$('wtBody').classList.contains('open')?'▲':'▼'}
@@ -1759,10 +1893,11 @@ function saveOriginalWTOverrides(){
       overrides[w.key]={label:w.label,code:w.code,desc:w.desc,unit:w.unit,price:w.price};
     }
   });
-  localStorage.setItem(`sec_maint_owt_${currentRegion}`,JSON.stringify(overrides));
+  _wtOverridesCache[currentRegion] = overrides;
+  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,`wtOverrides/${currentRegion}`), overrides); }
 }
 function loadOriginalWTOverrides(regionKey){
-  try{return JSON.parse(localStorage.getItem(`sec_maint_owt_${regionKey}`)||'{}');}catch{return{};}
+  return _wtOverridesCache[regionKey] || {};
 }
 function editWT(key,field,val){
   const w=workTypes.find(x=>x.key===key);if(!w)return;
@@ -2749,11 +2884,36 @@ async function generateExcelTaqareer(){
 // ══════════════════════════════════════════════════════════════
 //  TASKS SYSTEM
 // ══════════════════════════════════════════════════════════════
-const TASKS_KEY='sec_maint_tasks';
+// ── Firebase-backed Tasks ──
+let _tasksCache = [];
 let currentTaskFilter='all';
 
-function getTasks(){try{return JSON.parse(localStorage.getItem(TASKS_KEY)||'[]');}catch{return[];}}
-function saveTasks(t){localStorage.setItem(TASKS_KEY,JSON.stringify(t));}
+function getTasks(){ return _tasksCache; }
+
+function saveTasks(t){
+  _tasksCache = t;
+  saveTasksFB(t);
+}
+
+async function loadTasksFromFB(){
+  if(!window._fbReady) return;
+  const {db,ref,onValue} = window._fb;
+  // Real-time listener — يحدّث الشاشة فور أي تغيير من أي جهاز
+  onValue(ref(db,'tasks'), snap => {
+    _tasksCache = snap.exists() ? Object.values(snap.val()) : [];
+    if(document.getElementById('tasksScreen')?.style.display !== 'none'){
+      renderTasksScreen();
+    }
+  });
+}
+
+async function saveTasksFB(t){
+  if(!window._fbReady) return;
+  const {db,ref,set} = window._fb;
+  const obj={};
+  t.forEach(task=>{ obj[task.id]=task; });
+  await set(ref(db,'tasks'), obj);
+}
 
 function showTasksScreen(){
   document.getElementById('regionScreen').style.display='none';
@@ -3025,12 +3185,15 @@ function submitEditTask(tid){
 // ══════════════════════════════════════════════════════════════
 //  PERFORMANCE TRACKING SYSTEM
 // ══════════════════════════════════════════════════════════════
-const PERF_KEY='sec_maint_perf';
+let _perfCache={};
 let perfSessionStart=null,perfLastActivity=Date.now(),perfInactivityTimer=null;
 const INACTIVITY_LIMIT=10*60*1000; // 10 minutes
 
-function perfLoad(){try{return JSON.parse(localStorage.getItem(PERF_KEY)||'{}');}catch{return{};}}
-function perfSave(d){localStorage.setItem(PERF_KEY,JSON.stringify(d));}
+function perfLoad(){ return _perfCache; }
+function perfSave(d){
+  _perfCache = d;
+  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,'perf'), d); }
+}
 
 function perfStartSession(){
   if(!currentUser)return;

@@ -1,24 +1,46 @@
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-  import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>ملك الفلترة</title>
+</head>
+<body>
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyCBLv0cM-wlg2AF7W5v-9kk6nf-dSPnAPEof",
-    authDomain: "king-of-filtering-4e2f0.firebaseapp.com",
-    databaseURL: "https://king-of-filtering-4e2f0-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "king-of-filtering-4e2f0",
-    storageBucket: "king-of-filtering-4e2f0.firebasestorage.app",
-    messagingSenderId: "931937657323",
-    appId: "1:931937657323:web:83adcca98585ba6fab39ae"
-  };
+    <h1>مرحباً بك في تطبيق ملك الفلترة</h1>
+    <p>جاري فحص الاتصال بقاعدة البيانات...</p>
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+    <script type="module">
+        // استيراد المكتبات
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-database.js";
 
-  // هذا السطر هو اللي بيطمنك إن الربط نجح
-  set(ref(db, 'test_status/'), {
-    status: "Success",
-    message: "Hassan, your connection is live!",
-    time: new Date().toLocaleString()
-  });
-</script>
+        // إعداداتك الخاصة
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBLv0cM-wlg2AF7W5v-9kk6nf-dSPnAPEof",
+            authDomain: "king-of-filtering-4e2f0.firebaseapp.com",
+            databaseURL: "https://king-of-filtering-4e2f0-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "king-of-filtering-4e2f0",
+            storageBucket: "king-of-filtering-4e2f0.firebasestorage.app",
+            messagingSenderId: "931937657323",
+            appId: "1:931937657323:web:83adcca98585ba6fab39ae"
+        };
+
+        try {
+            // تشغيل Firebase
+            const app = initializeApp(firebaseConfig);
+            const db = getDatabase(app);
+
+            // إرسال بيانات تجريبية
+            set(ref(db, 'connection_test/'), {
+                hassan_status: "Online",
+                timestamp: new Date().toLocaleString()
+            }).then(() => {
+                console.log("Data sent successfully!");
+                alert("تم الاتصال بنجاح!");
+            });
+        } catch (error) {
+            console.error("Firebase Error:", error);
+        }
+    </script>
+</body>
+</html>

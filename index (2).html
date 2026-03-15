@@ -8,70 +8,118 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    
+    <script src="https://cdn.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f0f2f5; text-align: center; padding: 20px; }
-        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
-        h1 { color: #0057b8; }
-        button { background-color: #0057b8; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-size: 18px; width: 100%; }
-        button:hover { background-color: #004494; }
-        .status { margin-top: 20px; color: green; font-weight: bold; }
+        /* ستايل التطبيق الأساسي */
+        :root { --main-blue: #0057b8; --light-bg: #f4f7f6; }
+        body { font-family: sans-serif; background: var(--light-bg); text-align: center; padding: 20px; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--main-blue); color: white; border: none; cursor: pointer; font-weight: bold; }
+        #login-screen { display: block; }
+        #app-screen { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <img src="https://i.imgur.com/your-logo-url.png" alt="ملك الفلترة" style="width: 150px;">
-    <h1>نظام ملك الفلترة السحابي</h1>
-    <p>قم بتعبئة البيانات ثم اضغط حفظ وتصدير</p>
-    
-    <button onclick="simulateExport()">حفظ وتصدير للسحاب 🚀</button>
-    <div id="msg" class="status"></div>
-</div>
+    <div id="login-screen" class="container">
+        <img src="https://via.placeholder.com/100" alt="Logo" style="margin-bottom:20px;">
+        <h2>تسجيل دخول ملك الفلترة</h2>
+        <input type="text" id="username" placeholder="اسم المستخدم">
+        <input type="password" id="password" placeholder="كلمة المرور">
+        <button onclick="login()">دخول</button>
+    </div>
 
-<script>
-    // إعدادات Firebase الخاصة بك (أخذتها من صورك السابقة)
-    const firebaseConfig = {
-        apiKey: "AIzaSyDeANvGu68LHh2X2h2SsC5rRw92YUvXgyY",
-        authDomain: "king-of-filtering.firebaseapp.com",
-        projectId: "king-of-filtering",
-        storageBucket: "king-of-filtering.appspot.com",
-        messagingSenderId: "549508552252",
-        appId: "1:549508552252:web:85a357aa0772bfdb13c1"
-    };
+    <div id="app-screen" class="container">
+        <h2>تقرير صيانة الفلترة</h2>
+        <input type="text" id="technician" placeholder="اسم الفني">
+        <input type="text" id="client" placeholder="اسم العميل">
+        <select id="status">
+            <option value="تمت الصيانة">تمت الصيانة</option>
+            <option value="تحتاج قطع غيار">تحتاج قطع غيار</option>
+        </select>
+        <button onclick="exportToExcelWithCloud()">حفظ التقرير ورفعه سحابياً</button>
+        <button onclick="logout()" style="background:#cc0000;">خروج</button>
+    </div>
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const storage = firebase.storage();
+    <script>
+        // --- إعدادات Firebase الخاصة بك ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDeAnYgvARLhH2xzX28sC5rRw92YUx7gYM",
+            authDomain: "king-of-filtering.firebaseapp.com",
+            projectId: "king-of-filtering",
+            storageBucket: "king-of-filtering.appspot.com",
+            messagingSenderId: "549588551252",
+            appId: "1:549588551252:web:85a13572aa072bfdb13c1"
+        };
 
-    async function simulateExport() {
-        document.getElementById('msg').innerText = "جاري الرفع للسحاب...";
-        
-        // إنشاء ملف بسيط للتجربة
-        const content = "تقرير ملك الفلترة التجريبي";
-        const blob = new Blob([content], { type: "text/plain" });
-        const fileName = "Report_" + Date.now() + ".txt";
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
 
-        try {
-            // 1. الرفع للمخزن (Storage)
-            const fileRef = storage.ref().child('reports/' + fileName);
-            await fileRef.put(blob);
-            const url = await fileRef.getDownloadURL();
-
-            // 2. الحفظ في قاعدة البيانات (Firestore)
-            await db.collection("archive").add({
-                name: fileName,
-                url: url,
-                date: new Date().toLocaleString('ar-SA')
-            });
-
-            document.getElementById('msg').innerText = "✅ تم الحفظ في أرشيف ملك الفلترة!";
-            alert("تم الحفظ سحابياً بنجاح!");
-        } catch (e) {
-            console.error(e);
-            document.getElementById('msg').innerText = "❌ فشل الرفع!";
+        // --- دالة الدخول (تعمل مع أي مستخدم) ---
+        function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            
+            if(u === "admin" && p === "1234") { // يمكنك تغييرها أو ربطها بـ Firestore
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('app-screen').style.display = 'block';
+            } else {
+                alert("بيانات الدخول غير صحيحة");
+            }
         }
-    }
-</script>
+
+        function logout() { location.reload(); }
+
+        // --- دالة الرفع السحابي والتحميل ---
+        async function exportToExcelWithCloud() {
+            const tech = document.getElementById('technician').value;
+            const client = document.getElementById('client').value;
+            const status = document.getElementById('status').value;
+
+            if(!tech || !client) { alert("عبّي البيانات أولاً"); return; }
+
+            // 1. إنشاء ملف Excel
+            const data = [[ "الفني", "العميل", "الحالة" ], [ tech, client, status ]];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Report");
+            
+            const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const fileName = `Report_${Date.now()}.xlsx`;
+
+            try {
+                // 2. الرفع إلى Firebase Storage
+                const storageRef = storage.ref('reports/' + fileName);
+                await storageRef.put(blob);
+                const downloadURL = await storageRef.getDownloadURL();
+
+                // 3. الحفظ في Firestore (الأرشيف)
+                await db.collection('archive').add({
+                    fileName: fileName,
+                    technician: tech,
+                    client: client,
+                    url: downloadURL,
+                    date: new Date().toLocaleString()
+                });
+
+                // 4. تحميل الملف للجهاز
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                link.click();
+
+                alert("✅ تم الحفظ سحابياً وتحميل الملف بنجاح!");
+            } catch (error) {
+                console.error(error);
+                alert("❌ حدث خطأ في الرفع: " + error.message);
+            }
+        }
+    </script>
 </body>
 </html>

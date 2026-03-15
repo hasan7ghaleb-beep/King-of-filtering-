@@ -1,86 +1,77 @@
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>ملك الفلترة - سحابي</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ملك الفلترة - سحابي</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#002060">
-<meta name="apple-mobile-web-app-capable" content="yes">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-<style>
-/* هنا نضع كل التنسيقات (Styles) التي كانت في ملفك الأصلي */
-:root{--c:#0057B8;--c2:#0077CC;--g:#00B4A0;--r:#e53935;--bg:#eef4ff;--card:#fff;--border:#d0dff0;--txt:#0a2040;--muted:#6a7f9a}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:var(--bg);direction:rtl;color:var(--txt);min-height:100vh}
-/* ... (بقية تنسيقاتك الأصلية تظل كما هي) ... */
-</style>
-
-<script>
-// ══════════════════════════════════════════════════
-//  إعدادات FIREBASE - ملك الفلترة
-// ══════════════════════════════════════════════════
-const firebaseConfig = {
-  apiKey: "AIzaSyDBaRYgv68LhH2xZN2BsC5eEW92YUJx7gY", 
-  authDomain: "king-of-filtering.firebaseapp.com",
-  databaseURL: "https://king-of-filtering-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "king-of-filtering",
-  storageBucket: "king-of-filtering.appspot.com",
-  messagingSenderId: "549508551252",
-  appId: "1:549508551252:web:89a13572ea0772bfdb13c1"
-};
-
-// تشغيل Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const storage = firebase.storage();
-
-// وظيفة الرفع للسحاب (ستعمل تلقائياً عند الضغط على تحميل)
-async function saveToCloud(blob, fileName) {
-    try {
-        const fileRef = storage.ref().child('reports/' + fileName);
-        await fileRef.put(blob);
-        const url = await fileRef.getDownloadURL();
-
-        await db.collection("archive").add({
-            name: fileName,
-            url: url,
-            date: new Date().toLocaleString('ar-SA'),
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        console.log("تم الحفظ في سحابة ملك الفلترة!");
-    } catch (e) {
-        console.error("فشل الحفظ السحابي:", e);
-    }
-}
-
-// تسجيل الـ Service Worker للجوال
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-}
-
-// تعديل وظيفة التحميل الأصلية لترسل للسحاب أيضاً
-function exportToExcelWithCloud(blob, filename) {
-    // 1. التحميل المعتاد للجهاز
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-
-    // 2. الرفع للسحاب (بشكل خفي في الخلفية)
-    saveToCloud(blob, filename);
-}
-</script>
-
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; text-align: center; padding: 20px; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+        h1 { color: #0057b8; }
+        button { background-color: #0057b8; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-size: 18px; width: 100%; }
+        button:hover { background-color: #004494; }
+        .status { margin-top: 20px; color: green; font-weight: bold; }
+    </style>
 </head>
 <body>
+
+<div class="container">
+    <img src="https://i.imgur.com/your-logo-url.png" alt="ملك الفلترة" style="width: 150px;">
+    <h1>نظام ملك الفلترة السحابي</h1>
+    <p>قم بتعبئة البيانات ثم اضغط حفظ وتصدير</p>
+    
+    <button onclick="simulateExport()">حفظ وتصدير للسحاب 🚀</button>
+    <div id="msg" class="status"></div>
+</div>
+
+<script>
+    // إعدادات Firebase الخاصة بك (أخذتها من صورك السابقة)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDeANvGu68LHh2X2h2SsC5rRw92YUvXgyY",
+        authDomain: "king-of-filtering.firebaseapp.com",
+        projectId: "king-of-filtering",
+        storageBucket: "king-of-filtering.appspot.com",
+        messagingSenderId: "549508552252",
+        appId: "1:549508552252:web:85a357aa0772bfdb13c1"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    async function simulateExport() {
+        document.getElementById('msg').innerText = "جاري الرفع للسحاب...";
+        
+        // إنشاء ملف بسيط للتجربة
+        const content = "تقرير ملك الفلترة التجريبي";
+        const blob = new Blob([content], { type: "text/plain" });
+        const fileName = "Report_" + Date.now() + ".txt";
+
+        try {
+            // 1. الرفع للمخزن (Storage)
+            const fileRef = storage.ref().child('reports/' + fileName);
+            await fileRef.put(blob);
+            const url = await fileRef.getDownloadURL();
+
+            // 2. الحفظ في قاعدة البيانات (Firestore)
+            await db.collection("archive").add({
+                name: fileName,
+                url: url,
+                date: new Date().toLocaleString('ar-SA')
+            });
+
+            document.getElementById('msg').innerText = "✅ تم الحفظ في أرشيف ملك الفلترة!";
+            alert("تم الحفظ سحابياً بنجاح!");
+        } catch (e) {
+            console.error(e);
+            document.getElementById('msg').innerText = "❌ فشل الرفع!";
+        }
+    }
+</script>
 </body>
 </html>

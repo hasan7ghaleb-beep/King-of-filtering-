@@ -10,7 +10,6 @@
 :root{--c:#0057B8;--c2:#0077CC;--g:#00B4A0;--r:#e53935;--bg:#eef4ff;--card:#fff;--border:#d0dff0;--txt:#0a2040;--muted:#6a7f9a}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:var(--bg);direction:rtl;color:var(--txt);min-height:100vh}
-@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #regionScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:linear-gradient(145deg,#001833 0%,#002966 55%,#003d99 100%)}
 #regionScreen h1{color:#fff;font-size:26px;font-weight:700;margin-bottom:6px;text-align:center}
 #regionScreen p{color:rgba(255,255,255,.6);font-size:13px;margin-bottom:32px;text-align:center}
@@ -242,39 +241,6 @@ input[type=radio]{accent-color:var(--c)}
 .logged-user:hover{background:rgba(255,255,255,.25)}
 @media(max-width:680px){.fields-row{grid-template-columns:1fr}.photos-section{grid-template-columns:1fr}.before-panel{border-left:none;border-bottom:1.5px solid var(--border)}.meas-grid{grid-template-columns:1fr 1fr}.region-grid{grid-template-columns:1fr 1fr}.add-wt-row{grid-template-columns:1fr 1fr}}
 </style>
-<script type="module">
-// ══════════════════════════════════════════════════
-//  FIREBASE CONFIG — استبدل بإعداداتك من Firebase Console
-// ══════════════════════════════════════════════════
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, remove, push }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDBaRYgv68LhH2xZN2BsC5eEW92YUJx7gY",
-  authDomain: "king-of-filtering.firebaseapp.com",
-  databaseURL: "https://king-of-filtering-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "king-of-filtering",
-  storageBucket: "king-of-filtering.firebasestorage.app",
-  messagingSenderId: "549508551252",
-  appId: "1:549508551252:web:89a13572ea0772bfdb13c1",
-  measurementId: "G-FF72YTLTYF"
-};
-
-const app = initializeApp(firebaseConfig);
-const db  = getDatabase(app);
-
-// ── expose helpers to global scope ──
-window._fb = { db, ref, set, get, onValue, update, remove, push };
-window._fbReady = true;
-// Show connecting indicator while loading
-const _fbc = document.getElementById('fbConnecting');
-if(_fbc) _fbc.style.display='block';
-window.dispatchEvent(new Event('fbReady'));
-// Hide connecting indicator
-const fbc = document.getElementById('fbConnecting');
-if(fbc) fbc.style.display='none';
-</script>
 </head>
 <body>
 
@@ -287,9 +253,6 @@ if(fbc) fbc.style.display='none';
     </div>
     <div class="login-form">
     <div class="login-err" id="loginErr">اسم المستخدم أو كلمة المرور غير صحيحة</div>
-    <div id="fbConnecting" style="text-align:center;padding:10px 0;font-size:12px;color:rgba(255,255,255,.6);display:none">
-      <span style="animation:spin 1s linear infinite;display:inline-block;margin-left:5px">⏳</span> جاري الاتصال بالخادم...
-    </div>
     <div class="login-field"><label>اسم المستخدم</label><input id="loginUser" type="text" placeholder="أدخل اسم المستخدم" autocomplete="username"></div>
     <div class="login-field"><label>كلمة المرور</label><input id="loginPass" type="password" placeholder="أدخل كلمة المرور" autocomplete="current-password"></div>
     <button class="login-btn" onclick="doLogin()">تسجيل الدخول</button>
@@ -504,65 +467,22 @@ const EXCEL_TEMPLATES={
 // ══════════════════════════════════════════════════════════════
 //  AUTH SYSTEM
 // ══════════════════════════════════════════════════════════════
-const SESSION_KEY='sec_maint_session';
-
-// ── Firebase-backed Users ──
-let _usersCache = null;
-let _fbUsersListenerActive = false;
-
-function defaultUsers(){
-  return [
-    {username:'admin', password:'admin1234', displayName:'المدير العام',  role:'admin'},
-    {username:'eng1',  password:'Eng@1234',  displayName:'مهندس الصيانة', role:'engineer'},
-    {username:'tech1', password:'Tech@1234', displayName:'الفني',         role:'technician'},
-    {username:'asst1', password:'Asst@1234', displayName:'مساعد المدير',  role:'assistant_manager'},
-  ];
-}
-
+const AUTH_KEY='sec_maint_users',SESSION_KEY='sec_maint_session';
 function getUsers(){
-  return _usersCache || defaultUsers();
+  try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')||defaultUsers();}
+  catch{return defaultUsers();}
 }
-
-// Real-time listener للمستخدمين — يحدّث الكاش فور أي تغيير
-async function loadUsersFromFB(){
-  if(!window._fbReady) return;
-  if(_fbUsersListenerActive) return; // لا تسجّل مستمع مكرر
-  _fbUsersListenerActive = true;
-  const {db,ref,onValue,set} = window._fb;
-  return new Promise((resolve)=>{
-    let resolved = false;
-    onValue(ref(db,'users'), async (snap)=>{
-      if(snap.exists()){
-        _usersCache = Object.values(snap.val());
-      } else {
-        // أول تشغيل - ارفع المستخدمين الافتراضيين
-        const defs = defaultUsers();
-        const obj={};
-        defs.forEach(u=>{obj[u.username]=u;});
-        await set(ref(db,'users'), obj);
-        _usersCache = defs;
-      }
-      // تحديث قائمة المستخدمين إذا كانت مفتوحة
-      if(document.getElementById('usersPanel')?.classList.contains('open')){
-        renderUsersList();
-      }
-      if(!resolved){ resolved=true; resolve(); }
-    });
-  });
+function defaultUsers(){
+  const u=[
+    {username:'admin',     password:'admin1234', displayName:'المدير العام',     role:'admin'},
+    {username:'eng1',      password:'Eng@1234',  displayName:'مهندس الصيانة',    role:'engineer'},
+    {username:'tech1',     password:'Tech@1234', displayName:'الفني',            role:'technician'},
+    {username:'asst1',     password:'Asst@1234', displayName:'مساعد المدير',     role:'assistant_manager'},
+  ];
+  localStorage.setItem(AUTH_KEY,JSON.stringify(u));
+  return u;
 }
-
-async function saveUsersFB(u){
-  if(!window._fbReady) return;
-  const {db,ref,set} = window._fb;
-  const obj={};
-  u.forEach((usr)=>{obj[usr.username]=usr;});
-  await set(ref(db,'users'), obj);
-}
-
-function saveUsers(u){
-  _usersCache = u;
-  saveUsersFB(u);
-}
+function saveUsers(u){localStorage.setItem(AUTH_KEY,JSON.stringify(u));}
 function getSession(){
   try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}
   catch{return null;}
@@ -572,21 +492,12 @@ function clearSession(){sessionStorage.removeItem(SESSION_KEY);}
 
 let currentUser=null;
 
-async function doLogin(){
+function doLogin(){
   const uname=document.getElementById('loginUser').value.trim();
   const pass=document.getElementById('loginPass').value;
   const err=document.getElementById('loginErr');
-  const btn=document.querySelector('.login-btn');
-  if(btn){btn.disabled=true;btn.textContent='⏳ جاري التحقق...';}
-  // انتظر Firebase إذا لم يكن جاهزاً بعد
-  if(!window._fbReady){
-    await new Promise(r=>window.addEventListener('fbReady',r,{once:true}));
-  }
-  // تأكد من تحميل المستخدمين من Firebase أولاً
-  await loadUsersFromFB();
   const users=getUsers();
   const found=users.find(u=>u.username===uname&&u.password===pass);
-  if(btn){btn.disabled=false;btn.textContent='تسجيل الدخول';}
   if(!found){err.style.display='block';document.getElementById('loginPass').value='';return;}
   err.style.display='none';
   currentUser=found;
@@ -613,61 +524,19 @@ function routeAfterLogin(){
 }
 
 // Allow Enter key in login
-document.addEventListener('DOMContentLoaded',async ()=>{
+document.addEventListener('DOMContentLoaded',()=>{
   ['loginUser','loginPass'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   });
-
-  // ── انتظر Firebase ثم حمّل البيانات ──
-  async function initFirebase(){
-    await loadUsersFromFB();
-    await loadTasksFromFB();
-    await loadWtFromFB();
-    await loadPerfFromFB();
-  }
-
-  if(window._fbReady){
-    await initFirebase();
-  } else {
-    window.addEventListener('fbReady', ()=>initFirebase(), {once:true});
-  }
-
   // Auto-login from session
   const sess=getSession();
   if(sess){
     currentUser=sess;
-    // تحديث الـ session بآخر بيانات من Firebase
-    const fresh = getUsers().find(u=>u.username===sess.username);
-    if(fresh){ currentUser=fresh; setSession(fresh); }
     document.getElementById('loginScreen').style.display='none';
-    document.getElementById('loggedUserName').textContent=currentUser.displayName||currentUser.username;
+    document.getElementById('loggedUserName').textContent=sess.displayName||sess.username;
     routeAfterLogin();
   }
 });
-
-// ── تحميل Work Types من Firebase ──
-async function loadWtFromFB(){
-  if(!window._fbReady) return;
-  const {db,ref,get} = window._fb;
-  try{
-    const [cwSnap,owSnap] = await Promise.all([
-      get(ref(db,'customWt')),
-      get(ref(db,'wtOverrides'))
-    ]);
-    if(cwSnap.exists()) _customWtCache = cwSnap.val();
-    if(owSnap.exists()) _wtOverridesCache = owSnap.val();
-  }catch(e){console.error('loadWt',e);}
-}
-
-// ── تحميل Perf من Firebase ──
-async function loadPerfFromFB(){
-  if(!window._fbReady) return;
-  const {db,ref,get} = window._fb;
-  try{
-    const snap = await get(ref(db,'perf'));
-    if(snap.exists()) _perfCache = snap.val();
-  }catch(e){console.error('loadPerf',e);}
-}
 
 function renderRegionUserBtn(){
   const rs=document.getElementById('regionScreen');
@@ -1786,16 +1655,13 @@ function goBack(){
 
 // ═══ Work types ═══
 const CUSTOM_WT_KEY=r=>`sec_maint_cwt_${r}`;
-let _customWtCache={};
-let _wtOverridesCache={};
 function saveCustomWTs(){
   if(!currentRegion)return;
   const custom=workTypes.filter(w=>w.isCustom);
-  _customWtCache[currentRegion] = custom;
-  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,`customWt/${currentRegion}`), custom); }
+  localStorage.setItem(CUSTOM_WT_KEY(currentRegion),JSON.stringify(custom));
 }
 function loadCustomWTs(regionKey){
-  return _customWtCache[regionKey] || [];
+  try{return JSON.parse(localStorage.getItem(CUSTOM_WT_KEY(regionKey))||'[]');}catch{return[];}
 }
 
 function toggleWT(){$('wtBody').classList.toggle('open');$('wtArrow').textContent=$('wtBody').classList.contains('open')?'▲':'▼'}
@@ -1893,11 +1759,10 @@ function saveOriginalWTOverrides(){
       overrides[w.key]={label:w.label,code:w.code,desc:w.desc,unit:w.unit,price:w.price};
     }
   });
-  _wtOverridesCache[currentRegion] = overrides;
-  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,`wtOverrides/${currentRegion}`), overrides); }
+  localStorage.setItem(`sec_maint_owt_${currentRegion}`,JSON.stringify(overrides));
 }
 function loadOriginalWTOverrides(regionKey){
-  return _wtOverridesCache[regionKey] || {};
+  try{return JSON.parse(localStorage.getItem(`sec_maint_owt_${regionKey}`)||'{}');}catch{return{};}
 }
 function editWT(key,field,val){
   const w=workTypes.find(x=>x.key===key);if(!w)return;
@@ -2598,14 +2463,73 @@ async function generateExcelTasheehiya(){
 //  Janoob: نموذج الأمتار (sheet1) + مقايسة (sheet3 — generated)
 // ══════════════════════════════════════════
 async function generateExcelJanoob(){
-  // New template: single sheet, rows 5-39 = stations, row40=qty totals, row42=amounts, AI40=grand total
+  // Template column structure:
+  // D..AH = 31 work type data columns (with codes in row2, labels in row4, totals in row40/42)
+  // AI:AJ = merged "المقاول" metadata block (rows 1-3 merged, row4 has extra labels, row40:AJ42 merged = grand total)
+  // 
+  // Strategy for custom work types:
+  // 1. Shift AI/AJ columns RIGHT by ncustom (rename AI→AI+n, AJ→AJ+n in entire XML)
+  // 2. Place custom cols at original AI, AI+1, ... positions
+  // 3. Update grand total formula and merge refs
+
   const zip=await JSZip.loadAsync(b64ToArr(EXCEL_TEMPLATES.janoob));
   let sx=await zip.file('xl/worksheets/sheet1.xml').async('text');
   const MAX=35,n=Math.min(entries.length,MAX);
   const colTotals={};
   const JANOOB_DATA_COLS=['D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE','AF','AG','AH'];
 
-  // ── Fill station rows 5-39 ──
+  // ── Custom work types setup ──
+  const customWT=workTypes.filter(w=>w.isCustom);
+  const nc=customWT.length;
+
+  // Column letter helpers
+  const colNum=s=>{if(s.length===1)return s.charCodeAt(0)-64;return 26*(s.charCodeAt(0)-64)+(s.charCodeAt(1)-64);};
+  const colLet=n=>{if(n<=26)return String.fromCharCode(64+n);return String.fromCharCode(64+Math.floor((n-1)/26))+String.fromCharCode(64+(n-1)%26+1);};
+
+  // AI=35, AJ=36. Custom cols will be at 35,36,...35+nc-1
+  // Shifted AI will be at 35+nc, shifted AJ at 36+nc
+  const AI_NUM=colNum('AI'); // 35
+  const AJ_NUM=colNum('AJ'); // 36
+  const newAI=colLet(AI_NUM+nc); // AI shifts right by nc
+  const newAJ=colLet(AJ_NUM+nc); // AJ shifts right by nc
+  const customCols=Array.from({length:nc},(_,i)=>colLet(AI_NUM+i)); // AI,AJ,AK,...
+  const lastCustomCol=nc>0?customCols[nc-1]:'AH';
+  const totalSpan=AJ_NUM+nc; // total cols = AJ position + custom shift
+
+  if(nc>0){
+    // ── STEP 1: Shift all AI/AJ cell references right by nc ──
+    // Do AJ first (larger col number), then AI (to avoid collision)
+    // Pattern: any cell reference containing "AJ" followed by digit(s) → newAJ+digits
+    // Then "AI" → newAI+digits
+    // Also update merge cells
+    sx=sx.replace(/\bAJ(\d+)\b/g,(_,r)=>newAJ+r);
+    sx=sx.replace(/\bAI(\d+)\b/g,(_,r)=>newAI+r);
+    // Update merge refs: AI1:AJ1 → newAI1:newAJ1, AI2:AJ3 → newAI2:newAJ3, etc.
+    sx=sx.replace(/\bAI(\d+):AJ(\d+)\b/g,(_,r1,r2)=>newAI+r1+':'+newAJ+r2);
+    // Update spans in rows that had AI/AJ
+    // spans="1:36" should become 1:(36+nc)
+    sx=sx.replace(/spans="1:36"/g,`spans="1:${totalSpan}"`);
+
+    // ── STEP 2: Add custom col headers to rows 2, 3, 4 ──
+    let r2add='',r3add='',r4add='';
+    for(let i=0;i<nc;i++){
+      const col=customCols[i],w=customWT[i];
+      r2add+=`<c r="${col}2" s="33"><v>${w.code||0}</v></c>`;
+      r3add+=`<c r="${col}3" s="3" t="inlineStr"><is><t>${esc(w.unit||'EA')}</t></is></c>`;
+      r4add+=`<c r="${col}4" s="44" t="inlineStr"><is><t>${esc(w.label)}</t></is></c>`;
+    }
+    // Insert before the (now-shifted) newAI cells in each header row
+    sx=sx.replace(new RegExp('(<c r="'+newAI+'2")'),'r2add_PLACEHOLDER$1');
+    sx=sx.replace('r2add_PLACEHOLDER',r2add);
+    sx=sx.replace(new RegExp('(<c r="'+newAI+'3")'),'r3add_PLACEHOLDER$1');
+    if(sx.includes('r3add_PLACEHOLDER')){sx=sx.replace('r3add_PLACEHOLDER',r3add);}
+    else{// row3 may not have AI cell — append before </row> in row3
+      sx=sx.replace(/(<row r="3"[^>]*>[\s\S]*?)(<\/row>)/,(_,b,c)=>b+r3add+c);}
+    sx=sx.replace(new RegExp('(<c r="'+newAI+'4")'),'r4add_PLACEHOLDER$1');
+    sx=sx.replace('r4add_PLACEHOLDER',r4add);
+  }
+
+  // ── Fill station rows 5-39: standard cols + custom cols in ONE pass ──
   for(let i=0;i<MAX;i++){
     const entry=i<n?entries[i]:null;
     const rn=5+i;
@@ -2615,86 +2539,60 @@ async function generateExcelJanoob(){
       :`<c r="B${rn}" s="12"/>`;
     const CCell=`<c r="C${rn}" s="26"/>`;
     let dataCells='';
+    // Standard columns D..AH
     JANOOB_DATA_COLS.forEach(col=>{
       const cp=Object.values(JANOOB_COL).find(x=>x.col===col);
-      const key=cp?workTypes.find(w=>JANOOB_COL[String(w.code)]?.col===col)?.key:null;
+      const key=cp?workTypes.find(w=>!w.isCustom&&JANOOB_COL[String(w.code)]?.col===col)?.key:null;
       const v=entry&&key?entry.meas[key]||0:0;
       if(v>0){dataCells+=`<c r="${col}${rn}" s="27"><v>${v}</v></c>`;colTotals[col]=(colTotals[col]||0)+v;}
       else dataCells+=`<c r="${col}${rn}" s="27"/>`;
     });
-    const newRow=`<row r="${rn}" spans="1:36" ht="24.6" customHeight="1" x14ac:dyDescent="0.35">${ACell}${BCell}${CCell}${dataCells}</row>`;
+    // Custom cols at AI,AJ,... positions
+    for(let ci=0;ci<nc;ci++){
+      const col=customCols[ci],w=customWT[ci];
+      const v=entry?(entry.meas[w.key]||0):0;
+      if(v>0){dataCells+=`<c r="${col}${rn}" s="27"><v>${v}</v></c>`;colTotals[col]=(colTotals[col]||0)+v;}
+      else dataCells+=`<c r="${col}${rn}" s="27"/>`;
+    }
+    const newRow=`<row r="${rn}" spans="1:${totalSpan}" ht="24.6" customHeight="1" x14ac:dyDescent="0.35">${ACell}${BCell}${CCell}${dataCells}</row>`;
     const old=sx.match(new RegExp('<row r="'+rn+'"[^>]*>[\\s\\S]*?</row>'));
     if(old)sx=sx.replace(old[0],newRow);
     else sx=sx.replace('</sheetData>',newRow+'</sheetData>');
   }
 
-  // ── Update row 40 <v> caches (formulas already in template) ──
+  // ── Row 40: update standard col qty caches ──
   let grandTotal=0;
   JANOOB_DATA_COLS.forEach(col=>{
     const q=colTotals[col]||0;
     const cp=Object.entries(JANOOB_COL).find(([c,v])=>v.col===col);
     const price=cp?cp[1].price:0;
     grandTotal+=q*price;
-    // Update <v> cache for qty total
     sx=sx.replace(new RegExp('(<c r="'+col+'40"[^>]*>)(?:<f[^>]*>[^<]*</f>)?<v>[^<]*</v></c>'),
       (_,h)=>`${h}<f t="shared" si="0">SUM(${col}5:${col}39)</f><v>${q}</v></c>`);
-    // Update <v> cache for amount row 42
     sx=sx.replace(new RegExp('(<c r="'+col+'42"[^>]*>)(?:<f>[^<]*</f>)?<v>[^<]*</v></c>'),
       (_,h)=>`${h}<f>${col}40*${price}</f><v>${q*price}</v></c>`);
   });
 
-  // ── Update AI40 grand total + add custom work types as extra columns ──
-  const customWT=workTypes.filter(w=>w.isCustom);
-  let customTotal=0;
-
-  if(customWT.length>0){
-    // Extra columns: AJ, AK, AL... for each custom work type
-    const extraCols=['AJ','AK','AL','AM','AN','AO','AP','AQ','AR','AS'];
-    customWT.forEach((w,ci)=>{
-      const col=extraCols[ci];if(!col)return;
-      const totalQty=entries.reduce((s,e)=>s+(e.meas[w.key]||0),0);
-      const totalVal=totalQty*w.price;
-      customTotal+=totalVal;
-
-      // Add header cells in row 4 (name) and row 2 (code)
-      const addToRow=(rn,cell)=>{
-        sx=sx.replace(new RegExp('(</row>)(?=\\s*<row r="'+(rn+1)+'"[^>]*>|\\s*</sheetData>)'),
-          m=>{ const rowM=sx.match(new RegExp('<row r="'+rn+'"[^>]*>[\\s\\S]*?</row>'));
-               if(!rowM)return m;
-               return rowM[0].replace('</row>',cell+'</row>') === rowM[0] ? m : m; });
-        // Simpler: direct replace of the row
-        sx=sx.replace(new RegExp('(<row r="'+rn+'"[^>]*>[\\s\\S]*?)(</row>)'),
-          (_,body,close)=>body+cell+close);
-      };
-
-      const s27='27'; // data cell style
-      // Row 4 header
-      addToRow(4,`<c r="${col}4" s="27" t="inlineStr"><is><t>${esc(w.label)}</t></is></c>`);
-      // Row 2 code
-      addToRow(2,`<c r="${col}2" s="27"><v>${w.code||0}</v></c>`);
-      // Row 3 unit
-      addToRow(3,`<c r="${col}3" s="27" t="inlineStr"><is><t>${w.unit}</t></is></c>`);
-      // Station rows 5-39
-      for(let i=0;i<Math.min(entries.length,35);i++){
-        const rn=5+i,entry=entries[i];
-        const v=entry.meas[w.key]||0;
-        if(v>0){
-          sx=sx.replace(new RegExp('(<row r="'+rn+'"[^>]*>[\\s\\S]*?)(</row>)'),
-            (_,body,close)=>body+`<c r="${col}${rn}" s="27"><v>${v}</v></c>`+close);
-        }
-      }
-      // Row 40 qty total
-      sx=sx.replace(new RegExp('(<row r="40"[^>]*>[\\s\\S]*?)(</row>)'),
-        (_,body,close)=>body+`<c r="${col}40" s="17"><v>${totalQty}</v></c>`+close);
-      // Row 42 amount
-      sx=sx.replace(new RegExp('(<row r="42"[^>]*>[\\s\\S]*?)(</row>)'),
-        (_,body,close)=>body+`<c r="${col}42" s="23"><f>${col}40*${w.price}</f><v>${totalVal}</v></c>`+close);
-    });
+  // ── Add custom col qty totals (row 40) and amounts (row 42) ──
+  if(nc>0){
+    let r40add='',r42add='';
+    for(let ci=0;ci<nc;ci++){
+      const col=customCols[ci],w=customWT[ci];
+      const q=colTotals[col]||0;
+      const v=q*w.price;
+      grandTotal+=v;
+      r40add+=`<c r="${col}40" s="17"><f>SUM(${col}5:${col}39)</f><v>${q}</v></c>`;
+      r42add+=`<c r="${col}42" s="23"><f>${col}40*${w.price}</f><v>${v}</v></c>`;
+    }
+    // Insert custom cells BEFORE the shifted newAI cell in rows 40 and 42
+    sx=sx.replace(new RegExp('(<c r="'+newAI+'40")'),r40add+'$1');
+    sx=sx.replace(new RegExp('(<c r="'+newAI+'42")'),r42add+'$1');
   }
 
-  grandTotal+=customTotal;
-  sx=sx.replace(/<c r="AI40"([^>]*)>[\s\S]*?<\/c>/,
-    `<c r="AI40"$1><f>SUM(D42:AH42)</f><v>${grandTotal}</v></c>`);
+  // ── Update grand total formula to include custom cols ──
+  // Grand total = SUM of all amount cells D42..lastCustomCol42
+  sx=sx.replace(/<c r="[A-Z]+40"([^>]*s="48"[^>]*)>[\s\S]*?<\/c>/,
+    `<c r="${newAI}40"$1><f>SUM(D42:${lastCustomCol}42)</f><v>${grandTotal}</v></c>`);
 
   zip.file('xl/worksheets/sheet1.xml',sx);
   zip.file('xl/calcChain.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>');
@@ -2750,20 +2648,32 @@ async function generateExcelAmtar(){
     });
   }
 
-  // Last active col + 1 = grand total column
-  const LAST_COL_IDX=ALL_COLS.indexOf(activeCols[activeCols.length-1]);
-  const GT_COL=LAST_COL_IDX+1<ALL_COLS.length?ALL_COLS[LAST_COL_IDX+1]:'AB';
-  const totalSpan=2+activeCols.length+1; // A+B+active+GT
 
-  // ── Rebuild row 1: only active columns + GT label ──
+  // ── Build extra columns list for custom work types ──
+  // Custom cols go RIGHT AFTER last active col, GT shifts further right
+  // colLetterN(n): convert column number (1=A,2=B...) to letter(s)
+  const colLetterN=n=>{if(n<=26)return String.fromCharCode(64+n);return String.fromCharCode(64+Math.floor((n-1)/26))+String.fromCharCode(64+(n-1)%26+1);};
+  const colNumN=s=>{if(s.length===1)return s.charCodeAt(0)-64;return 26*(s.charCodeAt(0)-64)+(s.charCodeAt(1)-64);};
+  const customWT=workTypes.filter(w=>w.isCustom);
+  const ncustom=customWT.length;
+  const LAST_COL_IDX=ALL_COLS.indexOf(activeCols[activeCols.length-1]);
+  // Last active col number (A=1,B=2...)
+  const lastActiveNum=colNumN(activeCols[activeCols.length-1]);
+  // Custom cols start immediately after last active col
+  const customColMap=[]; // [{col,w}]
+  customWT.forEach((w,i)=>{customColMap.push({col:colLetterN(lastActiveNum+1+i),w});});
+  // GT_COL = right after all custom cols (or right after last active if no custom)
+  const GT_COL=colLetterN(lastActiveNum+ncustom+1);
+  const totalSpan=2+activeCols.length+ncustom+1; // A+B+active+custom+GT
+
+  // ── Rebuild row 1: active cols → custom WT labels → GT ──
   let r1cells=`<c r="A1" s="2" t="inlineStr"><is><t>العدد</t></is></c><c r="B1" s="3" t="inlineStr"><is><t>رقم المحطه</t></is></c>`;
   for(const col of activeCols){
     const cp=colPrices[col];
     let lbl=cp?.label||'';
     if(!lbl&&!isTash&&!isKabain){
-      // Standard: get label from shared strings via the original row1
       const origCell=sx.match(new RegExp('<c r="'+col+'1"[^>]*t="s"[^>]*><v>(\\d+)</v></c>'));
-      if(origCell)lbl=origCell[0]; // keep original cell
+      if(origCell)lbl=origCell[0];
     }
     if(isTash||isKabain){
       r1cells+=`<c r="${col}1" s="3" t="inlineStr"><is><t>${esc(lbl)}</t></is></c>`;
@@ -2772,13 +2682,17 @@ async function generateExcelAmtar(){
       r1cells+=origCell?origCell[0]:`<c r="${col}1" s="3"/>`;
     }
   }
+  // Custom cols BEFORE GT (بنود مضافة ثم المبلغ الإجمالي)
+  for(const {col,w} of customColMap){
+    r1cells+=`<c r="${col}1" s="3" t="inlineStr"><is><t>${esc(w.label)}</t></is></c>`;
+  }
   r1cells+=`<c r="${GT_COL}1" s="15" t="inlineStr"><is><t>المبلغ الإجمالي</t></is></c>`;
   sx=sx.replace(/<row r="1"[^>]*>[\s\S]*?<\/row>/,
     `<row r="1" spans="1:${totalSpan}" x14ac:dyDescent="0.25">${r1cells}</row>`);
 
   const colTotals={};
 
-  // ── Build data rows 2-20: only active columns, NO empty cells for unused ──
+  // ── Build data rows 2-20: active cols + custom WT cols (no GT data cell) ──
   for(let i=0;i<MAX;i++){
     const rn=2+i;
     const entry=i<n?entries[i]:null;
@@ -2795,13 +2709,24 @@ async function generateExcelAmtar(){
       if(v>0){dataCells+=`<c r="${col}${rn}" s="${style}"><v>${v}</v></c>`;colTotals[col]=(colTotals[col]||0)+v;}
       else dataCells+=`<c r="${col}${rn}" s="${style}"/>`;
     }
-    const newRow=`<row r="${rn}" spans="1:${totalSpan-1}" ht="15.75" x14ac:dyDescent="0.25">${ACell}${BCell}${dataCells}</row>`;
+    // Custom WT cols — style 9 (same as standard data cells)
+    for(const {col,w} of customColMap){
+      const v=entry?(entry.meas[w.key]||0):0;
+      if(v>0){dataCells+=`<c r="${col}${rn}" s="9"><v>${v}</v></c>`;colTotals[col]=(colTotals[col]||0)+v;}
+      else dataCells+=`<c r="${col}${rn}" s="9"/>`;
+    }
+    const newRow=`<row r="${rn}" spans="1:${totalSpan}" ht="15.75" x14ac:dyDescent="0.25">${ACell}${BCell}${dataCells}</row>`;
     sx=sx.replace(new RegExp('<row r="'+rn+'"[^>]*>[\\s\\S]*?</row>'),newRow);
   }
 
-  // ── Row 21: qty totals — active cols only ──
+  // ── Row 21: qty totals — active + custom cols BEFORE GT label ──
   let r21cells=`<c r="B21" s="15" t="inlineStr"><is><t>المجموع</t></is></c>`;
   for(const col of activeCols){
+    const q=colTotals[col]||0;
+    r21cells+=`<c r="${col}21" s="16"><f t="shared" si="0">SUM(${col}2:${col}20)</f><v>${q}</v></c>`;
+  }
+  // Custom WT totals BEFORE GT
+  for(const {col,w} of customColMap){
     const q=colTotals[col]||0;
     r21cells+=`<c r="${col}21" s="16"><f t="shared" si="0">SUM(${col}2:${col}20)</f><v>${q}</v></c>`;
   }
@@ -2809,12 +2734,17 @@ async function generateExcelAmtar(){
   sx=sx.replace(/<row r="21"[^>]*>[\s\S]*?<\/row>/,
     `<row r="21" spans="1:${totalSpan}" x14ac:dyDescent="0.25">${r21cells}</row>`);
 
-  // ── Row 22: amounts — active cols only + GT ──
+  // ── Row 22: amounts — active + custom cols + GT (grand total includes custom) ──
   let r22cells=''; let grandTotal=0;
   for(const col of activeCols){
     const cp=colPrices[col];if(!cp)continue;
     const q=colTotals[col]||0;const v=q*cp.price;grandTotal+=v;
     r22cells+=`<c r="${col}22" s="9"><f>SUM(${col}21*${cp.price})</f><v>${v}</v></c>`;
+  }
+  // Custom WT amounts BEFORE GT
+  for(const {col,w} of customColMap){
+    const q=colTotals[col]||0;const v=q*w.price;grandTotal+=v;
+    r22cells+=`<c r="${col}22" s="9"><f>${col}21*${w.price}</f><v>${v}</v></c>`;
   }
   r22cells+=`<c r="${GT_COL}22" s="9"><v>${grandTotal}</v></c>`;
   sx=sx.replace(/<row r="22"[^>]*>[\s\S]*?<\/row>/,
@@ -2884,36 +2814,11 @@ async function generateExcelTaqareer(){
 // ══════════════════════════════════════════════════════════════
 //  TASKS SYSTEM
 // ══════════════════════════════════════════════════════════════
-// ── Firebase-backed Tasks ──
-let _tasksCache = [];
+const TASKS_KEY='sec_maint_tasks';
 let currentTaskFilter='all';
 
-function getTasks(){ return _tasksCache; }
-
-function saveTasks(t){
-  _tasksCache = t;
-  saveTasksFB(t);
-}
-
-async function loadTasksFromFB(){
-  if(!window._fbReady) return;
-  const {db,ref,onValue} = window._fb;
-  // Real-time listener — يحدّث الشاشة فور أي تغيير من أي جهاز
-  onValue(ref(db,'tasks'), snap => {
-    _tasksCache = snap.exists() ? Object.values(snap.val()) : [];
-    if(document.getElementById('tasksScreen')?.style.display !== 'none'){
-      renderTasksScreen();
-    }
-  });
-}
-
-async function saveTasksFB(t){
-  if(!window._fbReady) return;
-  const {db,ref,set} = window._fb;
-  const obj={};
-  t.forEach(task=>{ obj[task.id]=task; });
-  await set(ref(db,'tasks'), obj);
-}
+function getTasks(){try{return JSON.parse(localStorage.getItem(TASKS_KEY)||'[]');}catch{return[];}}
+function saveTasks(t){localStorage.setItem(TASKS_KEY,JSON.stringify(t));}
 
 function showTasksScreen(){
   document.getElementById('regionScreen').style.display='none';
@@ -3185,15 +3090,12 @@ function submitEditTask(tid){
 // ══════════════════════════════════════════════════════════════
 //  PERFORMANCE TRACKING SYSTEM
 // ══════════════════════════════════════════════════════════════
-let _perfCache={};
+const PERF_KEY='sec_maint_perf';
 let perfSessionStart=null,perfLastActivity=Date.now(),perfInactivityTimer=null;
 const INACTIVITY_LIMIT=10*60*1000; // 10 minutes
 
-function perfLoad(){ return _perfCache; }
-function perfSave(d){
-  _perfCache = d;
-  if(window._fbReady){ const {db,ref,set}=window._fb; set(ref(db,'perf'), d); }
-}
+function perfLoad(){try{return JSON.parse(localStorage.getItem(PERF_KEY)||'{}');}catch{return{};}}
+function perfSave(d){localStorage.setItem(PERF_KEY,JSON.stringify(d));}
 
 function perfStartSession(){
   if(!currentUser)return;

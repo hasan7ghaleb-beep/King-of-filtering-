@@ -1,0 +1,26 @@
+{
+  "name": "ملك الفلترة — الشركة السعودية لطاقة",
+  "short_name": "ملك الفلترة",
+  "description": "تطبيق إدارة مهام الفلترة",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACNElEQVR4nO2Vb0tTYRjGr/s529ncYtsZNnClpUMtpX9SmSClQYFBgdCbvkBfoO/Ru75H1LvoTVQQoUKsFlJpUMyiSW7+mdvO7qsX2sxy08lAgnO9OIfncM79/M51/3kk1HGVOECZg9zcA/AAPAAPYF8AAlAEtekpsn3drHzNfkBANi8qBqoqTcdoCkAEJCECkIBEw8ipsczxZDhrByw38zHfE/RhfWlZ20WEJAxJaRkAiY1gQgoEPtHqvfHvc+OTo8dIg6mn85/uP0tEfhbKCbKWCQLYE4Q0Og0tC67tR7FURlh1q16u9+VfuCHH71Z9EjdL6w/fhC7HY6Fc19FINre44nxdWOkUoZKya401fEEAjp6PpVVhOo848xeHumZuTZx6mV7t7Zlf7jg8NjG8/upbsr/d8WdvXOt9d2dyqHCiL5mNtFV+hNtM/g836mrHFBgDVYU5nULmytmAOlHn+ZcF99CZk9VCPLYmg92hD7ZlZDA6G785Unn/ZBpdldWsCbBkxQKL5bu3nUwxX+KDR5WxzVhW3Z8Mtg//Q2iMqCrNyIA1M5AoFkzQRqo7YoprCqEL+n0oF4p8/bZk2/EIL/RbleXcCp2oz+QKVBtVmZ0rWo/TwVEjUGV9p3cEALaq/1KqPO1WaaY+B841snK/qguwASFK0gAbrtSe/+7MzVonIVvDiARESEqtgxqoYRuSNEagAKDKv2zk9tu2zfY+GHedA43y1wr9f4eRB+ABeAAeQKv1C1Hy6s8Mi2ulAAAAAElFTkSuQmCC",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACNElEQVR4nO2Vb0tTYRjGr/s529ncYtsZNnClpUMtpX9SmSClQYFBgdCbvkBfoO/Ru75H1LvoTVQQoUKsFlJpUMyiSW7+mdvO7qsX2sxy08lAgnO9OIfncM79/M51/3kk1HGVOECZg9zcA/AAPAAPYF8AAlAEtekpsn3drHzNfkBANi8qBqoqTcdoCkAEJCECkIBEw8ipsczxZDhrByw38zHfE/RhfWlZ20WEJAxJaRkAiY1gQgoEPtHqvfHvc+OTo8dIg6mn85/uP0tEfhbKCbKWCQLYE4Q0Og0tC67tR7FURlh1q16u9+VfuCHH71Z9EjdL6w/fhC7HY6Fc19FINre44nxdWOkUoZKya401fEEAjp6PpVVhOo848xeHumZuTZx6mV7t7Zlf7jg8NjG8/upbsr/d8WdvXOt9d2dyqHCiL5mNtFV+hNtM/g836mrHFBgDVYU5nULmytmAOlHn+ZcF99CZk9VCPLYmg92hD7ZlZDA6G785Unn/ZBpdldWsCbBkxQKL5bu3nUwxX+KDR5WxzVhW3Z8Mtg//Q2iMqCrNyIA1M5AoFkzQRqo7YoprCqEL+n0oF4p8/bZk2/EIL/RbleXcCp2oz+QKVBtVmZ0rWo/TwVEjUGV9p3cEALaq/1KqPO1WaaY+B841snK/qguwASFK0gAbrtSe/+7MzVonIVvDiARESEqtgxqoYRuSNEagAKDKv2zk9tu2zfY+GHedA43y1wr9f4eRB+ABeAAeQKv1C1Hy6s8Mi2ulAAAAAElFTkSuQmCC",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
